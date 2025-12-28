@@ -9,14 +9,16 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone
-from emergentintegrations.llm.chat import LlmChat, UserMessage
 import json
+from openai import AsyncOpenAI
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
+# Initialize OpenAI client
+openai_client = AsyncOpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
 db = client[os.environ['DB_NAME']]
 
 app = FastAPI()
@@ -429,15 +431,34 @@ Remember: For "{current_destination}" - use ONLY real, Google-searchable names! 
             else:
                 system_prompt = f"{system_prompt}\n\nCONTEXT:\n{recent_context}\n\nRespond to: {request.message}"
         
-        chat = LlmChat(
-            api_key=os.environ.get('OPENAI_API_KEY'),
-            session_id=request.session_id,
-            system_message=system_prompt
-        )
-        chat.with_model("openai", "gpt-4o")
+        # chat = LlmChat(
+        #     api_key=os.environ.get('OPENAI_API_KEY'),
+        #     session_id=request.session_id,
+        #     system_message=system_prompt
+        # )
+        # chat.with_model("openai", "gpt-4o")
         
-        user_msg = UserMessage(text=request.message)
-        response = await chat.send_message(user_msg)
+        # user_msg = UserMessage(text=request.message)
+        # response = await chat.send_message(user_msg)
+        # Build OpenAI messages array
+        openai_messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add conversation history
+        for msg in messages:
+            openai_messages.append({
+                "role": msg['role'],
+                "content": msg['content']
+            })
+        
+        # Call OpenAI API
+        completion = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=openai_messages,
+            temperature=0.7,
+            max_tokens=4000
+        )
+        
+        response = completion.choices[0].message.content
         
         ai_message = Message(
             session_id=request.session_id,
