@@ -1,0 +1,30 @@
+# Robots.txt for TripMate - AI Trip Planner
+# https://tripmate.ai
+
+User-agent: *
+Allow: /
+
+# Allow all search engine crawlers
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+User-agent: facebot
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+# Sitemap location
+Sitemap: https://tripmate.ai/sitemap.xml
+
+# Crawl-delay for polite crawling (optional)
+Crawl-delay: 1
