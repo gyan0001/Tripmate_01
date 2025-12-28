@@ -10,8 +10,7 @@ import { Toaster, toast } from 'sonner';
 import { jsPDF } from 'jspdf';
 import './App.css';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY;
 
 function App() {
@@ -126,7 +125,7 @@ function App() {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API}/chat`, {
+      const response = await axios.post(`${API_URL}/chat`, {
         session_id: sessionId,
         message: input
       });
