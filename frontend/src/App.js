@@ -443,8 +443,7 @@ function App() {
     if (!route?.coordinates) return null;
     
     const { start, end } = route.coordinates;
-    const mapUrl = `https://www.google.com/maps/embed/v1/directions?key=${GOOGLE_MAPS_KEY}&origin=${start.lat},${start.lng}&destination=${end.lat},${end.lng}&mode=driving`;
-    
+    const mapUrl = `https://maps.google.com/maps?q=${end.lat},${end.lng}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
     const openInGoogleMaps = () => {
       const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${start.lat},${start.lng}&destination=${end.lat},${end.lng}&travelmode=driving`;
       window.open(mapsUrl, '_blank');
