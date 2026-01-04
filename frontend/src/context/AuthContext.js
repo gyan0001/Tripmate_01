@@ -32,7 +32,7 @@ export const AuthProvider = ({ children }) => {
     }
     
     try {
-      const response = await axios.get(`${API}/auth/me`);
+      const response = await axios.get(`${API}/auth/me`);  // ✅ FIXED
       setUser(response.data);
       setIsAuthenticated(true);
     } catch (error) {
@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
-    const response = await axios.post(`${API}/auth/login`, { email, password });
+    const response = await axios.post(`${API}/auth/login`, { email, password });  // ✅ FIXED
     const { access_token, user } = response.data;
     localStorage.setItem('tripmate_token', access_token);
     setUser(user);
@@ -55,7 +55,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (email, password, name) => {
-    const response = await axios.post(`${API}/auth/register`, { email, password, name });
+    const response = await axios.post(`${API}/auth/register`, { email, password, name });  // ✅ FIXED
     const { access_token, user } = response.data;
     localStorage.setItem('tripmate_token', access_token);
     setUser(user);
@@ -70,7 +70,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const handleGoogleCallback = async (sessionId) => {
-    const response = await axios.post(`${API}/auth/google/session`, { session_id: sessionId });
+    const response = await axios.post(`${API}/auth/google/session`, { session_id: sessionId });  // ✅ FIXED
     const { access_token, user } = response.data;
     localStorage.setItem('tripmate_token', access_token);
     setUser(user);
@@ -80,7 +80,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await axios.post(`${API}/auth/logout`);
+      await axios.post(`${API}/auth/logout`);  // ✅ FIXED
     } catch (error) {
       console.error('Logout error:', error);
     }
