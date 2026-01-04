@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { HelmetProvider } from 'react-helmet-async';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import "@/index.css";
 import App from "@/App";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -9,11 +9,11 @@ import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import AuthCallback from "@/pages/AuthCallback";
 
-// Protected Route component
+// Protected Route component - SIMPLIFIED
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
-  const location = useLocation();
   
+  // Show loading spinner while checking auth
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -22,30 +22,17 @@ const ProtectedRoute = ({ children }) => {
     );
   }
   
+  // If not authenticated, redirect to login
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" replace />;
   }
   
+  // If authenticated, show the protected content
   return children;
 };
 
-// Main App Router
+// Main Routes
 const AppRoutes = () => {
-  const location = useLocation();
-  
-  // Handle Google OAuth callback with session_id in hash
-  React.useEffect(() => {
-    if (location.hash?.includes('session_id=')) {
-      const hash = location.hash.substring(1);
-      const params = new URLSearchParams(hash);
-      const sessionId = params.get('session_id');
-      if (sessionId) {
-        // Redirect to callback route with session_id
-        window.location.href = `/auth/callback#session_id=${sessionId}`;
-      }
-    }
-  }, [location]);
-  
   return (
     <Routes>
       {/* Public routes */}
@@ -53,7 +40,7 @@ const AppRoutes = () => {
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       
-      {/* Protected routes */}
+      {/* Protected route - main app */}
       <Route 
         path="/" 
         element={
@@ -63,20 +50,13 @@ const AppRoutes = () => {
         } 
       />
       
-      {/* Catch all - redirect to home */}
-      <Route 
-        path="*" 
-        element={
-          <ProtectedRoute>
-            <App />
-          </ProtectedRoute>
-        } 
-      />
+      {/* Catch all */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
 
-// Root component
+// Root
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
