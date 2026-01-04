@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "/*    /index.html    200" > build/_redirects
+echo "_redirects file created successfully"
