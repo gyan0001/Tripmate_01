@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { HelmetProvider } from 'react-helmet-async';
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import "@/index.css";
 import App from "@/App";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -12,6 +12,7 @@ import AuthCallback from "@/pages/AuthCallback";
 // Protected Route component
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
   
   if (loading) {
     return (
@@ -22,44 +23,69 @@ const ProtectedRoute = ({ children }) => {
   }
   
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
   
   return children;
 };
 
-// Router component that handles auth callback detection
-const AppRouter = () => {
+// Main App Router
+const AppRoutes = () => {
   const location = useLocation();
   
-  // Check for session_id in URL hash (Google OAuth callback)
-  if (location.hash?.includes('session_id=')) {
-    return <AuthCallback />;
-  }
+  // Handle Google OAuth callback with session_id in hash
+  React.useEffect(() => {
+    if (location.hash?.includes('session_id=')) {
+      const hash = location.hash.substring(1);
+      const params = new URLSearchParams(hash);
+      const sessionId = params.get('session_id');
+      if (sessionId) {
+        // Redirect to callback route with session_id
+        window.location.href = `/auth/callback#session_id=${sessionId}`;
+      }
+    }
+  }, [location]);
   
   return (
     <Routes>
+      {/* Public routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
-      <Route path="/*" element={
-        <ProtectedRoute>
-          <App />
-        </ProtectedRoute>
-      } />
+      
+      {/* Protected routes */}
+      <Route 
+        path="/" 
+        element={
+          <ProtectedRoute>
+            <App />
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* Catch all - redirect to home */}
+      <Route 
+        path="*" 
+        element={
+          <ProtectedRoute>
+            <App />
+          </ProtectedRoute>
+        } 
+      />
     </Routes>
   );
 };
 
+// Root component
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
     <HelmetProvider>
       <BrowserRouter>
         <AuthProvider>
-          <AppRouter />
+          <AppRoutes />
         </AuthProvider>
       </BrowserRouter>
     </HelmetProvider>
-  </React.StrictMode>,
+  </React.StrictMode>
 );
