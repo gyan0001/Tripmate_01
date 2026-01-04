@@ -9,10 +9,7 @@ const AuthCallback = () => {
   const location = useLocation();
   const hasProcessed = useRef(false);
 
-  useEffect(() => {
-    // Prevent double processing in StrictMode
-    if (hasProcessed.current) return;
-    hasProcessed.current = true;
+ 
 
     const processAuth = async () => {
       // Extract session_id from URL hash
