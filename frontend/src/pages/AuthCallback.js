@@ -9,23 +9,25 @@ const AuthCallback = () => {
   const location = useLocation();
   const hasProcessed = useRef(false);
 
- 
+  useEffect(() => {
+    // Prevent double processing in StrictMode
+    if (hasProcessed.current) return;
+    hasProcessed.current = true;
 
     const processAuth = async () => {
-      // Extract session_id from URL hash
-      const hash = location.hash;
-      const params = new URLSearchParams(hash.replace('#', ''));
-      const sessionId = params.get('session_id');
-
-      if (!sessionId) {
-        console.error('No session_id found');
-        navigate('/login');
-        return;
-      }
-
       try {
+        // Extract session_id from URL hash
+        const hash = location.hash;
+        const params = new URLSearchParams(hash.replace('#', ''));
+        const sessionId = params.get('session_id');
+
+        if (!sessionId) {
+          console.error('No session_id found');
+          navigate('/login');
+          return;
+        }
+
         await handleGoogleCallback(sessionId);
-        // Navigate to main app
         navigate('/', { replace: true });
       } catch (error) {
         console.error('Auth callback error:', error);
@@ -39,7 +41,7 @@ const AuthCallback = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
       <div className="text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 bg-slate-900 rounded-xl mb-4 animate-pulse">
+        <div className="inline-flex items-center justify-center w-12 h-12 bg-teal-600 rounded-xl mb-4 animate-pulse">
           <MapPin className="h-6 w-6 text-white" />
         </div>
         <p className="text-slate-600">Signing you in...</p>
