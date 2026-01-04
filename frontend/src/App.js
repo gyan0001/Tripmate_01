@@ -1,19 +1,65 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
-import { Send, MapPin, Hotel, Activity, DollarSign, Cloud, Navigation, Utensils, Map as MapIcon, ExternalLink, Download, Plus, History as HistoryIcon, Trash2, Calendar, Clock, Plane, Train, Lightbulb, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Send, MapPin, Hotel, Activity, DollarSign, Cloud, Navigation, Utensils, Map as MapIcon, ExternalLink, Download, Plus, History as HistoryIcon, Trash2, Calendar, Clock, Plane, Train, Lightbulb, ChevronLeft, ChevronRight, FileDown, LogOut, User, Save, Info, Phone, Mail, X } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
 import { Badge } from './components/ui/badge';
 import { Toaster, toast } from 'sonner';
 import { jsPDF } from 'jspdf';
+import { useAuth } from './context/AuthContext';
 import './App.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY;
 
+// MapView component moved outside App to prevent re-creation on each render
+const MapView = memo(({ route }) => {
+  if (!route?.coordinates) return null;
+  
+  const { start, end } = route.coordinates;
+  const mapUrl = `https://www.google.com/maps/embed/v1/directions?key=${GOOGLE_MAPS_KEY}&origin=${start.lat},${start.lng}&destination=${end.lat},${end.lng}&mode=driving`;
+  
+  const openInGoogleMaps = () => {
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${start.lat},${start.lng}&destination=${end.lat},${end.lng}&travelmode=driving`;
+    window.open(mapsUrl, '_blank');
+    toast.success('Opening route in Google Maps');
+  };
+  
+  // Unique key to force iframe refresh when route changes
+  const mapKey = `map-${start.lat}-${start.lng}-${end.lat}-${end.lng}`;
+  
+  return (
+    <div className="space-y-3">
+      <div className="h-96 rounded-2xl overflow-hidden border border-border shadow-sm">
+        <iframe
+          key={mapKey}
+          title="route-map"
+          width="100%"
+          height="100%"
+          frameBorder="0"
+          src={mapUrl}
+          allowFullScreen
+        />
+      </div>
+      <Button 
+        onClick={openInGoogleMaps}
+        className="w-full"
+        data-testid="open-maps-button"
+      >
+        <ExternalLink className="h-4 w-4 mr-2" />
+        Open Route in Google Maps
+      </Button>
+    </div>
+  );
+});
+
+MapView.displayName = 'MapView';
+
 function App() {
+  const { user, logout } = useAuth();
   const [sessionId, setSessionId] = useState(() => `session_${Date.now()}`);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -22,6 +68,9 @@ function App() {
   const [selectedRoute, setSelectedRoute] = useState(0);
   const [chatHistory, setChatHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [userTrips, setUserTrips] = useState([]);
+  const [savingTrip, setSavingTrip] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   
@@ -35,6 +84,58 @@ function App() {
       inputRef.current.focus();
     }
   }, [loading, messages]);
+
+  // Load user's saved trips on mount
+  useEffect(() => {
+    if (user) {
+      loadUserTrips();
+    }
+  }, [user]);
+
+  const loadUserTrips = async () => {
+    try {
+      const response = await axios.get(`${API}/user/trips`, { withCredentials: true });
+      setUserTrips(response.data);
+    } catch (error) {
+      console.error('Failed to load trips:', error);
+    }
+  };
+
+  const saveCurrentTrip = async () => {
+    if (!tripData) return;
+    
+    setSavingTrip(true);
+    try {
+      await axios.post(`${API}/user/trips`, 
+        { trip_data: tripData },
+        { withCredentials: true }
+      );
+      toast.success('Trip saved to your history!');
+      loadUserTrips();
+    } catch (error) {
+      toast.error('Failed to save trip');
+      console.error(error);
+    } finally {
+      setSavingTrip(false);
+    }
+  };
+
+  const loadSavedTrip = (trip) => {
+    setTripData(trip.trip_data);
+    setShowHistory(false);
+    toast.success('Trip loaded!');
+  };
+
+  const deleteSavedTrip = async (tripId, e) => {
+    e.stopPropagation();
+    try {
+      await axios.delete(`${API}/user/trips/${tripId}`, { withCredentials: true });
+      toast.success('Trip deleted');
+      loadUserTrips();
+    } catch (error) {
+      toast.error('Failed to delete trip');
+    }
+  };
 
   useEffect(() => {
     // Load chat history from localStorage
@@ -125,7 +226,7 @@ function App() {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API_URL}/chat`, {
+      const response = await axios.post(`${API}/chat`, {
         session_id: sessionId,
         message: input
       });
@@ -223,7 +324,7 @@ function App() {
                         bestParse = parsed;
                         lastGoodEnd = i;
                       }
-                    } catch (te) {}
+                    } catch (te) { /* Silently ignore partial JSON parse errors */ }
                   }
                 }
                 
@@ -259,7 +360,7 @@ function App() {
                     if (routesMatch) {
                       try {
                         parsedTripData.routes = JSON.parse(routesMatch[1].replace(/,\s*$/, ''));
-                      } catch (re) {}
+                      } catch (re) { /* Silently ignore routes parse errors */ }
                     }
                     
                     console.log('Strategy 4 created minimal trip object:', parsedTripData);
@@ -437,45 +538,6 @@ function App() {
       e.preventDefault();
       sendMessage();
     }
-  };
-
-  const MapView = ({ route }) => {
-    if (!route?.coordinates) return null;
-    
-    const { start, end } = route.coordinates;
-    const mapUrl = `https://www.google.com/maps/embed/v1/directions?key=AIzaSyCZUvcb03jnhhgzxTDOQZG2hTcJNljN1TI&origin=${start.lat},${start.lng}&destination=${end.lat},${end.lng}&mode=driving`;
-    const openInGoogleMaps = () => {
-      const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${start.lat},${start.lng}&destination=${end.lat},${end.lng}&travelmode=driving`;
-      window.open(mapsUrl, '_blank');
-      toast.success('Opening route in Google Maps');
-    };
-    
-    // Unique key to force iframe refresh when route changes
-    const mapKey = `map-${start.lat}-${start.lng}-${end.lat}-${end.lng}`;
-    
-    return (
-      <div className="space-y-3">
-        <div className="h-96 rounded-2xl overflow-hidden border border-border shadow-sm">
-          <iframe
-            key={mapKey}
-            title="route-map"
-            width="100%"
-            height="100%"
-            frameBorder="0"
-            src={mapUrl}
-            allowFullScreen
-          />
-        </div>
-        <Button 
-          onClick={openInGoogleMaps}
-          className="w-full"
-          data-testid="open-maps-button"
-        >
-          <ExternalLink className="h-4 w-4 mr-2" />
-          Open Route in Google Maps
-        </Button>
-      </div>
-    );
   };
 
   const downloadRouteAsPDF = async (routeIndex) => {
@@ -1120,6 +1182,36 @@ function App() {
     toast.success('Trip plan downloaded successfully! 🎉');
   };
 
+  // Share trip functionality
+  const handleShareTrip = async () => {
+    const shareText = `Check out my NZ trip plan: ${tripData.from} → ${tripData.to} (${tripData.duration}) 🥝`;
+    const shareUrl = window.location.href;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `TripMate NZ - ${tripData.from} to ${tripData.to}`,
+          text: shareText,
+          url: shareUrl
+        });
+        toast.success('Trip shared! 🎉');
+      } catch (err) {
+        // User cancelled or error - fallback to clipboard
+        copyToClipboard(shareUrl);
+      }
+    } else {
+      copyToClipboard(shareUrl);
+    }
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success('Link copied to clipboard! 📋');
+    }).catch(() => {
+      toast.error('Failed to copy link');
+    });
+  };
+
   const openActivityLink = (activity) => {
     const searchQuery = encodeURIComponent(`${activity.name} ${tripData.to}`);
     const url = `https://www.google.com/search?q=${searchQuery}`;
@@ -1163,6 +1255,75 @@ function App() {
       </Helmet>
       
       <Toaster position="top-right" />
+
+      {/* About Us Modal */}
+      {showAbout && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowAbout(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
+                  <MapPin className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-900">TripMate</h2>
+                  <p className="text-sm text-slate-500">Your Kiwi Trip Planner</p>
+                </div>
+              </div>
+              <button onClick={() => setShowAbout(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                <X className="h-5 w-5 text-slate-400" />
+              </button>
+            </div>
+
+            {/* About Content */}
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">About TripMate</h3>
+                <p className="text-slate-600 text-sm leading-relaxed">
+                  TripMate is New Zealand&apos;s AI-powered trip planner, designed to make exploring Aotearoa effortless and personalized.
+                </p>
+              </div>
+
+              <div className="p-4 bg-primary/5 rounded-xl border border-primary/20">
+                <h4 className="font-semibold text-slate-900 mb-1">Founded by Kevin Patel</h4>
+                <p className="text-sm text-slate-600">Student at ICL Graduate Business School</p>
+                <p className="text-sm text-slate-600">Bachelor in Business Information System</p>
+                <p className="text-sm text-primary mt-2 italic">&quot;Built with AI, for travelers who dream big.&quot;</p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-3">Contact Us</h3>
+                <div className="space-y-3">
+                  <a href="tel:+64221551141" className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                      <Phone className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500">Phone</p>
+                      <p className="font-medium text-slate-900">+64 22 155 1141</p>
+                    </div>
+                  </a>
+                  <a href="mailto:ptlkevin.83@gmail.com" className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                      <Mail className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500">Email</p>
+                      <p className="font-medium text-slate-900">ptlkevin.83@gmail.com</p>
+                    </div>
+                  </a>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="pt-4 border-t border-slate-200 text-center">
+                <p className="text-xs text-slate-400">© 2025 TripMate. All rights reserved to Kevin Patel.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Desktop: Split Screen Layout */}
       <div className="hidden lg:flex h-screen" role="application" aria-label="Trip Planning Application">
@@ -1171,11 +1332,42 @@ function App() {
           {/* Header */}
           <header className="p-6 border-b border-border">
             <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-heading font-bold text-primary tracking-tight">TripMate 🥝</h1>
-                <p className="text-sm text-muted-foreground mt-1">Kia Ora! Your Kiwi Trip Planner</p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
+                  <MapPin className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-semibold text-slate-900 tracking-tight">TripMate</h1>
+                  <p className="text-sm text-muted-foreground">Kia Ora, {user?.name?.split(' ')[0] || 'Traveler'}!</p>
+                </div>
               </div>
               <nav className="flex items-center gap-2" aria-label="Chat controls">
+                {/* About Button */}
+                <Button
+                  onClick={() => setShowAbout(true)}
+                  variant="ghost"
+                  size="sm"
+                  className="h-8"
+                  title="About"
+                >
+                  <Info className="h-4 w-4" />
+                </Button>
+                {/* User Menu */}
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg">
+                    <User className="h-4 w-4 text-slate-600" />
+                    <span className="text-sm text-slate-700 max-w-[100px] truncate">{user?.name?.split(' ')[0]}</span>
+                  </div>
+                  <Button
+                    onClick={logout}
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    title="Logout"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </div>
                 <Button
                   onClick={() => setShowHistory(!showHistory)}
                   variant="outline"
@@ -1198,40 +1390,35 @@ function App() {
             </div>
           </header>
 
-          {/* History Sidebar */}
+          {/* History Sidebar - Shows saved trips */}
           {showHistory && (
-            <div className="border-b border-border bg-accent/30 max-h-48 overflow-y-auto">
+            <div className="border-b border-border bg-slate-50 max-h-64 overflow-y-auto">
               <div className="p-4">
-                <h3 className="font-heading font-semibold text-sm mb-3">Chat History</h3>
-                {chatHistory.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No chat history yet</p>
+                <h3 className="font-semibold text-sm mb-3 text-slate-900">Your Saved Trips</h3>
+                {userTrips.length === 0 ? (
+                  <p className="text-xs text-slate-500">No saved trips yet. Save a trip to see it here!</p>
                 ) : (
                   <div className="space-y-2">
-                    {chatHistory.map((chat) => (
+                    {userTrips.map((trip) => (
                       <div
-                        key={chat.id}
-                        className="flex items-center justify-between p-2 rounded bg-card hover:bg-accent cursor-pointer text-sm group"
+                        key={trip.trip_id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer text-sm group transition-all"
                       >
                         <div
-                          onClick={() => loadChat(chat)}
-                          className="flex-1 truncate"
+                          onClick={() => loadSavedTrip(trip)}
+                          className="flex-1"
                         >
-                          <p className="truncate">{chat.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(chat.timestamp).toLocaleDateString()}
+                          <p className="font-medium text-slate-900">{trip.from_location} → {trip.to_location}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {trip.duration} • {new Date(trip.created_at).toLocaleDateString()}
                           </p>
                         </div>
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteChat(chat.id);
-                          }}
-                          variant="ghost"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100"
+                        <button
+                          onClick={(e) => deleteSavedTrip(trip.trip_id, e)}
+                          className="p-1.5 rounded hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-opacity"
                         >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                          <Trash2 className="h-3.5 w-3.5 text-slate-400" />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -1244,31 +1431,31 @@ function App() {
           <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center px-8">
-                <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
-                  <span className="text-4xl">🥝</span>
+                <div className="w-16 h-16 rounded-2xl bg-slate-900 flex items-center justify-center mb-6">
+                  <MapPin className="w-8 h-8 text-white" />
                 </div>
-                <h2 className="text-2xl font-heading font-semibold mb-3">Kia Ora! Explore Aotearoa</h2>
-                <p className="text-muted-foreground text-sm leading-relaxed max-w-sm">
-                  Tell me where you want to explore in beautiful New Zealand, and I will create personalized trip plans with routes, activities, and Kiwi recommendations!
+                <h2 className="text-xl font-semibold text-slate-900 mb-2">Plan Your NZ Adventure</h2>
+                <p className="text-slate-500 text-sm leading-relaxed max-w-sm">
+                  Tell me where you want to explore in New Zealand, and I&apos;ll create a personalized trip plan with routes, activities, and local recommendations.
                 </p>
                 
                 {/* Popular NZ Destinations */}
                 <div className="mt-8 w-full max-w-md">
-                  <p className="text-xs font-semibold text-muted-foreground mb-3">🗺️ Popular Destinations</p>
+                  <p className="text-xs font-medium text-slate-400 mb-3">POPULAR DESTINATIONS</p>
                   <div className="grid grid-cols-2 gap-2">
                     <button 
                       onClick={() => setInput('Plan a trip from Auckland to Queenstown for 5 days')}
-                      className="p-3 text-left bg-accent/50 hover:bg-accent rounded-lg border border-border/50 hover:border-primary/30 transition-all group"
+                      className="p-3 text-left bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-all"
                     >
-                      <span className="font-medium text-sm group-hover:text-primary">Queenstown</span>
-                      <p className="text-xs text-muted-foreground mt-0.5">Adventure Capital</p>
+                      <span className="font-medium text-sm text-slate-900">Queenstown</span>
+                      <p className="text-xs text-slate-500 mt-0.5">Adventure Capital</p>
                     </button>
                     <button 
                       onClick={() => setInput('Plan a trip from Auckland to Rotorua for 3 days')}
-                      className="p-3 text-left bg-accent/50 hover:bg-accent rounded-lg border border-border/50 hover:border-primary/30 transition-all group"
+                      className="p-3 text-left bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-all"
                     >
-                      <span className="font-medium text-sm group-hover:text-primary">Rotorua</span>
-                      <p className="text-xs text-muted-foreground mt-0.5">Geothermal & Māori Culture</p>
+                      <span className="font-medium text-sm text-slate-900">Rotorua</span>
+                      <p className="text-xs text-slate-500 mt-0.5">Geothermal & Māori Culture</p>
                     </button>
                     <button 
                       onClick={() => setInput('Plan a trip from Christchurch to Milford Sound for 4 days')}
@@ -1348,9 +1535,10 @@ function App() {
         </aside>
 
         {/* Right Panel - Dynamic Canvas */}
-        <section className="flex-1 bg-accent/30 overflow-y-auto" aria-label="Trip Details">
+        <section className="flex-1 bg-accent/30 overflow-y-auto relative" aria-label="Trip Details">
           {tripData ? (
-            <article className="p-8 space-y-6">
+            <>
+            <article className="p-8 space-y-6 pb-28">
               {/* Header with Navigation */}
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -2175,15 +2363,37 @@ function App() {
                 </Card>
               )}
             </article>
-          ) : (
+            
+            {/* Sticky Action Bar - Desktop */}
+            <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-border p-4 shadow-lg">
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  onClick={() => downloadRouteAsPDF(selectedRoute)}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-all"
+                >
+                  <FileDown className="h-4 w-4" />
+                  <span>Download PDF</span>
+                </button>
+                <button
+                  onClick={saveCurrentTrip}
+                  disabled={savingTrip}
+                  className="flex items-center gap-2 px-5 py-2.5 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>{savingTrip ? 'Saving...' : 'Save Trip'}</span>
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
             <div className="flex items-center justify-center h-full p-8">
               <div className="text-center max-w-md">
-                <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
-                  <MapIcon className="w-12 h-12 text-primary" />
+                <div className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-6">
+                  <MapIcon className="w-12 h-12 text-slate-400" />
                 </div>
-                <h3 className="text-xl font-heading font-semibold mb-3">Trip Details Will Appear Here</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Once you request a trip plan, you'll see route options, activities, hotels, and more visualized in this space.
+                <h3 className="text-xl font-semibold text-slate-900 mb-3">Trip Details Will Appear Here</h3>
+                <p className="text-slate-500 text-sm leading-relaxed">
+                  Once you request a trip plan, you&apos;ll see route options, activities, hotels, and more visualized in this space.
                 </p>
               </div>
             </div>
@@ -2196,11 +2406,26 @@ function App() {
         {/* Header with Navigation */}
         <header className="p-3 border-b border-border bg-card">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-heading font-bold text-primary">TripMate 🥝</h1>
-              <p className="text-xs text-muted-foreground">Kia Ora! Your Kiwi Trip Planner</p>
-            </div>
             <div className="flex items-center gap-2">
+              <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center">
+                <MapPin className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold text-slate-900">TripMate</h1>
+                <p className="text-xs text-muted-foreground">Kia Ora, {user?.name?.split(' ')[0] || 'Traveler'}!</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {/* About Button */}
+              <Button
+                onClick={() => setShowAbout(true)}
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                title="About"
+              >
+                <Info className="h-4 w-4" />
+              </Button>
               {/* New Chat Button */}
               <Button
                 onClick={startNewChat}
@@ -2220,6 +2445,16 @@ function App() {
                 title="Trip History"
               >
                 <HistoryIcon className="h-4 w-4" />
+              </Button>
+              {/* Logout Button */}
+              <Button
+                onClick={logout}
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                title="Logout"
+              >
+                <LogOut className="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -2332,21 +2567,9 @@ function App() {
               </div>
             </TabsContent>
 
-            <TabsContent value="trip" className="flex-1 overflow-y-auto m-0">
-              {/* Download Button - Sticky at top */}
-              <div className="sticky top-0 z-10 p-3 bg-gradient-to-b from-background via-background to-transparent">
-                <Button
-                  onClick={() => downloadRouteAsPDF(selectedRoute)}
-                  className="w-full bg-primary hover:bg-primary/90"
-                  size="lg"
-                >
-                  <Download className="h-5 w-5 mr-2" />
-                  Download Complete Trip (PDF)
-                </Button>
-              </div>
-              
+            <TabsContent value="trip" className="flex-1 overflow-y-auto m-0 pb-48">
               {/* Trip Details */}
-              <div className="p-3 pt-0 space-y-3">
+              <div className="p-3 space-y-3">
                 {/* Trip Header */}
                 <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-xl p-4">
                   <h2 className="text-lg font-heading font-bold">{tripData.from} → {tripData.to}</h2>
@@ -2524,12 +2747,126 @@ function App() {
                 {tripData.cost_estimate && (
                   <Card>
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-base">Cost Estimate</CardTitle>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-primary" />
+                        Cost Estimate
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2 text-xs">
-                      <div className="flex justify-between">
-                        <span>Total</span>
-                        <span className="font-semibold font-mono">{tripData.cost_estimate.total}</span>
+                      {tripData.cost_estimate.accommodation && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Accommodation</span>
+                          <span className="font-semibold font-mono">{tripData.cost_estimate.accommodation}</span>
+                        </div>
+                      )}
+                      {tripData.cost_estimate.food && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Food</span>
+                          <span className="font-semibold font-mono">{tripData.cost_estimate.food}</span>
+                        </div>
+                      )}
+                      {(tripData.cost_estimate.fuel || tripData.cost_estimate.transport) && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Transport</span>
+                          <span className="font-semibold font-mono">{tripData.cost_estimate.transport || tripData.cost_estimate.fuel}</span>
+                        </div>
+                      )}
+                      {tripData.cost_estimate.activities && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Activities</span>
+                          <span className="font-semibold font-mono">{tripData.cost_estimate.activities}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between pt-2 border-t border-border">
+                        <span className="font-semibold">Total</span>
+                        <span className="font-semibold font-mono text-primary">{tripData.cost_estimate.total}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Weather Forecast - Mobile */}
+                {tripData.weather && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Cloud className="h-4 w-4 text-primary" />
+                        Weather Forecast
+                      </CardTitle>
+                      {tripData.weather.date_range && (
+                        <CardDescription className="text-xs">
+                          {tripData.weather.date_range}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-xs">
+                      <div className="flex items-center justify-between p-2 bg-accent/30 rounded-lg">
+                        <div>
+                          <span className="text-muted-foreground">Average: </span>
+                          <span className="font-semibold">{tripData.weather.average_temp}</span>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">{tripData.weather.conditions}</Badge>
+                      </div>
+                      
+                      {tripData.weather.daily_forecast && tripData.weather.daily_forecast.length > 0 && (
+                        <div className="grid grid-cols-2 gap-2">
+                          {tripData.weather.daily_forecast.slice(0, 4).map((day, idx) => (
+                            <div key={idx} className="p-2 bg-accent/20 rounded-lg">
+                              <p className="font-medium">{day.date}</p>
+                              <p className="text-muted-foreground">{day.temp} - {day.condition}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {tripData.weather.packing_tip && (
+                        <div className="p-2 bg-primary/10 rounded-lg">
+                          <span className="font-medium">💡 </span>
+                          {tripData.weather.packing_tip}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Packing List - Mobile */}
+                {tripData.packing_list && tripData.packing_list.length > 0 && (
+                  <Card className="border-secondary/50 bg-secondary/5">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Badge className="bg-secondary text-secondary-foreground text-xs">📝</Badge>
+                        Things to Bring
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                        {tripData.packing_list.map((item, idx) => (
+                          <li key={idx} className="flex items-center gap-1.5">
+                            <span className="text-secondary">✓</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Kiwi Tips - Mobile */}
+                {tripData.recommendations && tripData.recommendations.length > 0 && (
+                  <Card className="border-primary/30 bg-gradient-to-r from-sky-50 to-green-50">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <span>🥝</span>
+                        Kiwi Tips
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {tripData.recommendations.map((rec, idx) => (
+                          <div key={idx} className="p-2.5 bg-white rounded-lg border border-border/50 text-xs">
+                            {rec}
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
@@ -2635,6 +2972,29 @@ function App() {
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Mobile Sticky Action Bar - Only show when trip exists */}
+        {tripData && (
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-border p-3 shadow-lg z-40" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => downloadRouteAsPDF(selectedRoute)}
+                className="flex items-center justify-center gap-2 py-3 bg-slate-900 text-white rounded-lg text-sm font-medium active:scale-95 transition-all"
+              >
+                <FileDown className="h-4 w-4" />
+                <span>Download PDF</span>
+              </button>
+              <button
+                onClick={saveCurrentTrip}
+                disabled={savingTrip}
+                className="flex items-center justify-center gap-2 py-3 border border-slate-300 text-slate-700 rounded-lg text-sm font-medium active:scale-95 transition-all disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                <span>{savingTrip ? 'Saving...' : 'Save Trip'}</span>
+              </button>
             </div>
           </div>
         )}
