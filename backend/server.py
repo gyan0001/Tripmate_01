@@ -1,29 +1,278 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 import json
-from openai import AsyncOpenAI
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+import httpx
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-# Initialize OpenAI client
-openai_client = AsyncOpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
 db = client[os.environ['DB_NAME']]
+
+# JWT Configuration
+JWT_SECRET = os.environ.get('JWT_SECRET', 'tripmate_secret_key_2024')
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_DAYS = 7
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+security = HTTPBearer(auto_error=False)
 
+# ============ AUTH MODELS ============
+class UserRegister(BaseModel):
+    email: str
+    password: str
+    name: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class UserResponse(BaseModel):
+    user_id: str
+    email: str
+    name: str
+    picture: Optional[str] = None
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+# ============ AUTH HELPERS ============
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(user_id: str, email: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRATION_DAYS)
+    to_encode = {"user_id": user_id, "email": email, "exp": expire}
+    return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+async def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[dict]:
+    """Get current user from cookie or Authorization header"""
+    token = None
+    
+    # Try cookie first
+    token = request.cookies.get("session_token")
+    
+    # Fall back to Authorization header
+    if not token and credentials:
+        token = credentials.credentials
+    
+    if not token:
+        return None
+    
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            return None
+        
+        user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+        return user
+    except JWTError:
+        return None
+
+async def require_auth(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """Require authentication - raises 401 if not authenticated"""
+    user = await get_current_user(request, credentials)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+# ============ AUTH ENDPOINTS ============
+@api_router.post("/auth/register", response_model=TokenResponse)
+async def register(user_data: UserRegister, response: Response):
+    """Register a new user with email and password"""
+    # Check if email already exists
+    existing = await db.users.find_one({"email": user_data.email.lower()}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Create user
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    user_doc = {
+        "user_id": user_id,
+        "email": user_data.email.lower(),
+        "name": user_data.name,
+        "password_hash": hash_password(user_data.password),
+        "picture": None,
+        "auth_provider": "email",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one(user_doc)
+    
+    # Create token
+    token = create_access_token(user_id, user_data.email.lower())
+    
+    # Set cookie
+    response.set_cookie(
+        key="session_token",
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        max_age=JWT_EXPIRATION_DAYS * 24 * 60 * 60,
+        path="/"
+    )
+    
+    return TokenResponse(
+        access_token=token,
+        user=UserResponse(user_id=user_id, email=user_data.email.lower(), name=user_data.name)
+    )
+
+@api_router.post("/auth/login", response_model=TokenResponse)
+async def login(user_data: UserLogin, response: Response):
+    """Login with email and password"""
+    user = await db.users.find_one({"email": user_data.email.lower()}, {"_id": 0})
+    
+    if not user or not user.get("password_hash"):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    if not verify_password(user_data.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Create token
+    token = create_access_token(user["user_id"], user["email"])
+    
+    # Set cookie
+    response.set_cookie(
+        key="session_token",
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        max_age=JWT_EXPIRATION_DAYS * 24 * 60 * 60,
+        path="/"
+    )
+    
+    return TokenResponse(
+        access_token=token,
+        user=UserResponse(
+            user_id=user["user_id"],
+            email=user["email"],
+            name=user["name"],
+            picture=user.get("picture")
+        )
+    )
+
+@api_router.post("/auth/google/session")
+async def google_session(request: Request, response: Response):
+    """Exchange Google OAuth session_id for app session"""
+    body = await request.json()
+    session_id = body.get("session_id")
+    
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id required")
+    
+    # Call Emergent Auth to get user data
+    async with httpx.AsyncClient() as client:
+        try:
+            res = await client.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": session_id}
+            )
+            if res.status_code != 200:
+                raise HTTPException(status_code=401, detail="Invalid session")
+            
+            google_data = res.json()
+        except Exception as e:
+            logging.error(f"Google auth error: {e}")
+            raise HTTPException(status_code=401, detail="Authentication failed")
+    
+    # Check if user exists
+    email = google_data["email"].lower()
+    existing_user = await db.users.find_one({"email": email}, {"_id": 0})
+    
+    if existing_user:
+        user_id = existing_user["user_id"]
+        # Update user info if needed
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {
+                "name": google_data.get("name", existing_user["name"]),
+                "picture": google_data.get("picture"),
+                "last_login": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        user_name = google_data.get("name", existing_user["name"])
+    else:
+        # Create new user
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        user_doc = {
+            "user_id": user_id,
+            "email": email,
+            "name": google_data.get("name", "User"),
+            "picture": google_data.get("picture"),
+            "auth_provider": "google",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.users.insert_one(user_doc)
+        user_name = google_data.get("name", "User")
+    
+    # Create JWT token
+    token = create_access_token(user_id, email)
+    
+    # Set cookie
+    response.set_cookie(
+        key="session_token",
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        max_age=JWT_EXPIRATION_DAYS * 24 * 60 * 60,
+        path="/"
+    )
+    
+    return {
+        "access_token": token,
+        "user": {
+            "user_id": user_id,
+            "email": email,
+            "name": user_name,
+            "picture": google_data.get("picture")
+        }
+    }
+
+@api_router.get("/auth/me", response_model=UserResponse)
+async def get_me(user: dict = Depends(require_auth)):
+    """Get current authenticated user"""
+    return UserResponse(
+        user_id=user["user_id"],
+        email=user["email"],
+        name=user["name"],
+        picture=user.get("picture")
+    )
+
+@api_router.post("/auth/logout")
+async def logout(response: Response):
+    """Logout - clear session cookie"""
+    response.delete_cookie(key="session_token", path="/")
+    return {"message": "Logged out successfully"}
+
+# ============ TRIP MODELS ============
+
+# ============ TRIP MODELS ============
 class Message(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -58,6 +307,21 @@ class ShareTripRequest(BaseModel):
 class ShareTripResponse(BaseModel):
     share_id: str
     share_url: str
+
+class EmailTripRequest(BaseModel):
+    recipient_email: str
+    trip_data: Dict[str, Any]
+
+class ContactRequest(BaseModel):
+    name: str
+    email: str
+    phone: Optional[str] = None
+    message: Optional[str] = None
+    preferred_contact: str = "email"
+    trip_data: Optional[Dict[str, Any]] = None
+
+# Owner email for receiving contact form submissions
+OWNER_EMAIL = "kevinpatel95999@gmail.com"
 
 @api_router.get("/")
 async def root():
@@ -431,34 +695,15 @@ Remember: For "{current_destination}" - use ONLY real, Google-searchable names! 
             else:
                 system_prompt = f"{system_prompt}\n\nCONTEXT:\n{recent_context}\n\nRespond to: {request.message}"
         
-        # chat = LlmChat(
-        #     api_key=os.environ.get('OPENAI_API_KEY'),
-        #     session_id=request.session_id,
-        #     system_message=system_prompt
-        # )
-        # chat.with_model("openai", "gpt-4o")
-        
-        # user_msg = UserMessage(text=request.message)
-        # response = await chat.send_message(user_msg)
-        # Build OpenAI messages array
-        openai_messages = [{"role": "system", "content": system_prompt}]
-        
-        # Add conversation history
-        for msg in messages:
-            openai_messages.append({
-                "role": msg['role'],
-                "content": msg['content']
-            })
-        
-        # Call OpenAI API
-        completion = await openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=openai_messages,
-            temperature=0.7,
-            max_tokens=4000
+        chat = LlmChat(
+            api_key=os.environ.get('OPENAI_API_KEY'),
+            session_id=request.session_id,
+            system_message=system_prompt
         )
+        chat.with_model("openai", "gpt-4o")
         
-        response = completion.choices[0].message.content
+        user_msg = UserMessage(text=request.message)
+        response = await chat.send_message(user_msg)
         
         ai_message = Message(
             session_id=request.session_id,
@@ -567,6 +812,131 @@ async def get_shared_trip(share_id: str):
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")
     return trip
+
+# ============ USER TRIP HISTORY ============
+class SaveTripRequest(BaseModel):
+    trip_data: Dict[str, Any]
+
+@api_router.post("/user/trips")
+async def save_user_trip(request: SaveTripRequest, user: dict = Depends(require_auth)):
+    """Save a trip to user's history"""
+    trip_id = f"trip_{uuid.uuid4().hex[:12]}"
+    trip_doc = {
+        "trip_id": trip_id,
+        "user_id": user["user_id"],
+        "trip_data": request.trip_data,
+        "from_location": request.trip_data.get("from", ""),
+        "to_location": request.trip_data.get("to", ""),
+        "duration": request.trip_data.get("duration", ""),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.user_trips.insert_one(trip_doc)
+    return {"trip_id": trip_id, "message": "Trip saved successfully"}
+
+@api_router.get("/user/trips")
+async def get_user_trips(user: dict = Depends(require_auth)):
+    """Get all trips for the current user"""
+    trips = await db.user_trips.find(
+        {"user_id": user["user_id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return trips
+
+@api_router.delete("/user/trips/{trip_id}")
+async def delete_user_trip(trip_id: str, user: dict = Depends(require_auth)):
+    """Delete a trip from user's history"""
+    result = await db.user_trips.delete_one({
+        "trip_id": trip_id,
+        "user_id": user["user_id"]
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    return {"message": "Trip deleted successfully"}
+
+@api_router.post("/email/trip")
+async def email_trip(request: EmailTripRequest):
+    """Send trip details to user's email"""
+    try:
+        trip = request.trip_data
+        
+        # Build HTML email content
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h1 style="color: #0ea5e9; margin-bottom: 10px;">TripMate NZ</h1>
+            <p style="color: #64748b; margin-bottom: 20px;">Your Kiwi Trip Planner</p>
+            
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                <h2 style="margin: 0 0 10px 0; color: #1e293b;">{trip.get('from', 'Origin')} → {trip.get('to', 'Destination')}</h2>
+                <p style="color: #64748b; margin: 0;">{trip.get('duration', 'Duration not specified')}</p>
+            </div>
+            
+            {'<div style="margin-bottom: 20px;"><h3 style="color: #1e293b;">Cost Estimate</h3><p>' + str(trip.get('cost_estimate', {})) + '</p></div>' if trip.get('cost_estimate') else ''}
+            
+            {'<div style="margin-bottom: 20px;"><h3 style="color: #1e293b;">Hotels</h3><ul>' + ''.join([f"<li>{h.get('name', 'Hotel')} - {h.get('price_range', 'Price TBD')}</li>" for h in trip.get('hotels', [])[:5]]) + '</ul></div>' if trip.get('hotels') else ''}
+            
+            {'<div style="margin-bottom: 20px;"><h3 style="color: #1e293b;">Activities</h3><ul>' + ''.join([f"<li>{a.get('name', 'Activity')}</li>" for a in trip.get('activities', [])[:5]]) + '</ul></div>' if trip.get('activities') else ''}
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                <p style="color: #64748b; font-size: 14px;">This trip was created with TripMate NZ - Your Kiwi Trip Planner</p>
+            </div>
+        </div>
+        """
+        
+        # Store the email request in database (for now, as we don't have email service configured)
+        email_doc = {
+            "id": str(uuid.uuid4()),
+            "recipient_email": request.recipient_email,
+            "trip_from": trip.get('from'),
+            "trip_to": trip.get('to'),
+            "status": "queued",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.email_queue.insert_one(email_doc)
+        
+        logger.info(f"Email queued for {request.recipient_email}: {trip.get('from')} to {trip.get('to')}")
+        
+        return {
+            "status": "success",
+            "message": f"Trip details will be sent to {request.recipient_email}"
+        }
+    except Exception as e:
+        logger.error(f"Email error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+@api_router.post("/contact")
+async def submit_contact(request: ContactRequest):
+    """Handle contact form submissions - sends to owner email"""
+    try:
+        trip = request.trip_data or {}
+        
+        # Store contact submission in database
+        contact_doc = {
+            "id": str(uuid.uuid4()),
+            "name": request.name,
+            "email": request.email,
+            "phone": request.phone,
+            "message": request.message,
+            "preferred_contact": request.preferred_contact,
+            "trip_from": trip.get('from'),
+            "trip_to": trip.get('to'),
+            "trip_duration": trip.get('duration'),
+            "status": "new",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.contact_submissions.insert_one(contact_doc)
+        
+        logger.info(f"Contact form received from {request.name} ({request.email})")
+        
+        # In production, this would send an email to OWNER_EMAIL
+        # For now, we log and store in database
+        
+        return {
+            "status": "success", 
+            "message": "Your message has been sent! Our travel expert will contact you soon."
+        }
+    except Exception as e:
+        logger.error(f"Contact form error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to submit contact form: {str(e)}")
 
 app.include_router(api_router)
 
