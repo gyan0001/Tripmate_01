@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { HelmetProvider } from 'react-helmet-async';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import "@/index.css";
 import App from "@/App";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -9,11 +9,13 @@ import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import AuthCallback from "@/pages/AuthCallback";
 
-// Protected Route component - SIMPLIFIED
+// Protected Route - Wait for auth to load before deciding
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
   
-  // Show loading spinner while checking auth
+  console.log('ProtectedRoute check:', { isAuthenticated, loading, path: location.pathname });
+  
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -22,25 +24,56 @@ const ProtectedRoute = ({ children }) => {
     );
   }
   
-  // If not authenticated, redirect to login
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    console.log('Not authenticated, redirecting to login');
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
   
-  // If authenticated, show the protected content
+  console.log('Authenticated, showing protected content');
   return children;
 };
 
-// Main Routes
+// Public Route - Redirect to home if already logged in
+const PublicRoute = ({ children }) => {
+  const { isAuthenticated, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
+      </div>
+    );
+  }
+  
+  if (isAuthenticated) {
+    console.log('Already authenticated, redirecting to home');
+    return <Navigate to="/" replace />;
+  }
+  
+  return children;
+};
+
 const AppRoutes = () => {
   return (
     <Routes>
-      {/* Public routes */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/signup" element={<SignupPage />} />
+      <Route 
+        path="/login" 
+        element={
+          <PublicRoute>
+            <LoginPage />
+          </PublicRoute>
+        } 
+      />
+      <Route 
+        path="/signup" 
+        element={
+          <PublicRoute>
+            <SignupPage />
+          </PublicRoute>
+        } 
+      />
       <Route path="/auth/callback" element={<AuthCallback />} />
       
-      {/* Protected route - main app */}
       <Route 
         path="/" 
         element={
@@ -50,13 +83,11 @@ const AppRoutes = () => {
         } 
       />
       
-      {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
 
-// Root
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
