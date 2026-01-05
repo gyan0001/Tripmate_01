@@ -939,12 +939,16 @@ async def submit_contact(request: ContactRequest):
 
 app.include_router(api_router)
 
+# CORS Configuration
+allowed_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=[origin.strip() for origin in allowed_origins],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 logging.basicConfig(
