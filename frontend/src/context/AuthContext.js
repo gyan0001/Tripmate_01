@@ -2,10 +2,12 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 
 const AuthContext = createContext(null);
+const API = (process.env.REACT_APP_BACKEND_URL || 'https://tripmate-01-4.onrender.com') + '/api';
 
-const API = process.env.REACT_APP_BACKEND_URL + '/api';
+// Configure axios to send credentials
+axios.defaults.withCredentials = true;
 
-// Configure axios to use token from localStorage
+// Add token to requests
 axios.interceptors.request.use((config) => {
   const token = localStorage.getItem('tripmate_token');
   if (token) {
@@ -19,7 +21,6 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Check auth status on mount
   useEffect(() => {
     checkAuth();
   }, []);
@@ -28,6 +29,7 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('tripmate_token');
     if (!token) {
       setLoading(false);
+      setIsAuthenticated(false);
       return;
     }
     
@@ -36,7 +38,7 @@ export const AuthProvider = ({ children }) => {
       setUser(response.data);
       setIsAuthenticated(true);
     } catch (error) {
-      // Token invalid, clear it
+      console.error('Auth check failed:', error);
       localStorage.removeItem('tripmate_token');
       setUser(null);
       setIsAuthenticated(false);
@@ -64,8 +66,6 @@ export const AuthProvider = ({ children }) => {
   };
 
   const loginWithGoogle = () => {
-    // Google OAuth only works on Emergent preview URLs
-    // For custom domains (tripmate.travel), use email/password login
     const isEmergentPreview = window.location.hostname.includes('emergentagent.com') || 
                               window.location.hostname === 'localhost';
     
@@ -73,7 +73,6 @@ export const AuthProvider = ({ children }) => {
       const redirectUrl = window.location.origin + '/auth/callback';
       window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
     } else {
-      // For custom domains, show message that Google login is not available
       alert('Google login is only available on the preview site. Please use email/password to sign in.');
     }
   };
