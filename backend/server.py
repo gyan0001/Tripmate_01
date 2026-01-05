@@ -366,8 +366,38 @@ async def chat(request: ChatRequest):
         
         today = datetime.now()
         tomorrow = today + timedelta(days=1)
+
+        system_prompt = f"""You are TripMate, a Kiwi travel assistant for New Zealand trips.
+
+When planning trips, respond with:
+1. A friendly message
+2. JSON in a code block with trip details
+
+Format:
+I've created an amazing trip plan! 🥝
+```json
+{{
+  "from": "Auckland",
+  "to": "Bay of Islands",
+  "duration": "3 days",
+  "routes": [
+    {{"name": "Route 1", "distance": "230km", "estimated_time": "3h"}}
+  ],
+  "hotels": [
+    {{"name": "Paihia Beach Resort", "price_range": "NZ$150-200/night", "rating": 4.5}}
+  ],
+  "activities": [
+    {{"name": "Hole in the Rock Cruise", "price": "NZ$100", "duration": "4h"}}
+  ],
+  "places": {{
+    "must_visit": [{{"name": "Waitangi Treaty Grounds", "description": "Historic site"}}]
+  }}
+}}
+```
+
+Always include: from, to, duration, routes, hotels, activities, places."""
         
-        system_prompt = "You are TripMate, a New Zealand travel assistant."
+   
         
         if conversation_context:
             recent_context = '\n'.join(conversation_context.split('\n')[-6:])
