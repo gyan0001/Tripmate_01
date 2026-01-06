@@ -1,21 +1,21 @@
 {
-  "short_name": "TripMate",
-  "name": "TripMate - AI Trip Planner",
-  "description": "Plan your perfect trip with AI. Get personalized routes, flights, hotels, activities & itineraries.",
+  "short_name": "TripMate NZ",
+  "name": "TripMate - New Zealand Trip Planner",
+  "description": "AI-powered New Zealand trip planning app",
   "icons": [
     {
-      "src": "favicon.ico",
+      "src": "favicon_io/favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     },
     {
-      "src": "logo192.png",
+      "src": "favicon_io/android-chrome-192x192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any maskable"
     },
     {
-      "src": "logo512.png",
+      "src": "favicon_io/android-chrome-512x512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any maskable"
@@ -23,12 +23,11 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#0ea5e9",
+  "theme_color": "#14b8a6",
   "background_color": "#ffffff",
   "orientation": "portrait-primary",
-  "categories": ["travel", "navigation", "utilities"],
-  "lang": "en-US",
+  "categories": ["travel", "lifestyle", "utilities"],
+  "lang": "en-NZ",
   "dir": "ltr",
-  "scope": "/",
-  "prefer_related_applications": false
+  "scope": "/"
 }
