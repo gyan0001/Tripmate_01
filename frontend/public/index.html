@@ -3,7 +3,14 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#0ea5e9" />
+        <meta name="theme-color" content="#14b8a6" />
+        
+        <!-- Favicons -->
+        <link rel="icon" type="image/x-icon" href="%PUBLIC_URL%/favicon_io/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="16x16" href="%PUBLIC_URL%/favicon_io/favicon-16x16.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/favicon_io/favicon-32x32.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/favicon_io/apple-touch-icon.png" />
+        <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
         
         <!-- Primary SEO Meta Tags -->
         <title>TripMate NZ 🥝 | Plan Your New Zealand Adventure | Kiwi Trip Planner</title>
@@ -15,14 +22,14 @@
         <meta name="googlebot" content="index, follow" />
         <meta name="geo.region" content="NZ" />
         <meta name="geo.placename" content="New Zealand" />
-        <link rel="canonical" href="https://tripmate.nz" />
+        <link rel="canonical" href="https://tripmate.travel" />
         
         <!-- Open Graph / Facebook -->
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://tripmate.nz/" />
+        <meta property="og:url" content="https://tripmate.travel/" />
         <meta property="og:title" content="TripMate NZ 🥝 | Plan Your New Zealand Adventure" />
         <meta property="og:description" content="Kia Ora! Plan your perfect NZ trip with AI. Explore Queenstown, Rotorua, Milford Sound & more. Get Kiwi recommendations, routes & itineraries." />
-        <meta property="og:image" content="https://tripmate.nz/og-image.png" />
+        <meta property="og:image" content="https://tripmate.travel/favicon_io/android-chrome-512x512.png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta property="og:site_name" content="TripMate NZ" />
@@ -30,10 +37,10 @@
         
         <!-- Twitter -->
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:url" content="https://tripmate.nz/" />
+        <meta name="twitter:url" content="https://tripmate.travel/" />
         <meta name="twitter:title" content="TripMate NZ 🥝 | Plan Your New Zealand Adventure" />
         <meta name="twitter:description" content="Kia Ora! Plan your perfect NZ trip with AI. Explore Queenstown, Rotorua, Milford Sound & more. Free Kiwi trip planner." />
-        <meta name="twitter:image" content="https://tripmate.nz/og-image.png" />
+        <meta name="twitter:image" content="https://tripmate.travel/favicon_io/android-chrome-512x512.png" />
         
         <!-- Additional SEO Tags -->
         <meta name="application-name" content="TripMate NZ" />
@@ -43,41 +50,36 @@
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="format-detection" content="telephone=no" />
         
-        <!-- Geo Tags for Local SEO -->
-        <meta name="geo.region" content="NZ" />
-        <meta name="geo.placename" content="New Zealand" />
-        
         <!-- JSON-LD Structured Data for Rich Snippets -->
         <script type="application/ld+json">
         {
             "@context": "https://schema.org",
             "@type": "WebApplication",
-            "name": "TripMate",
-            "alternateName": ["TripMate", "TripMate", "Trip Planner AI"],
-            "url": "https://tripmate",
-            "description": "AI-powered trip planner that creates personalized road trip routes, accommodations, activities, and day-by-day itineraries. Plan your perfect vacation with intelligent travel assistance.",
+            "name": "TripMate NZ",
+            "alternateName": ["TripMate", "TripMate New Zealand", "Kiwi Trip Planner"],
+            "url": "https://tripmate.travel",
+            "description": "AI-powered New Zealand trip planner that creates personalized road trip routes, accommodations, Māori cultural experiences, and day-by-day itineraries. Plan your perfect Aotearoa adventure.",
             "applicationCategory": "TravelApplication",
             "operatingSystem": "Web",
             "offers": {
                 "@type": "Offer",
                 "price": "0",
-                "priceCurrency": "USD"
+                "priceCurrency": "NZD"
             },
-            "aggregateRating": {
-                "@type": "AggregateRating",
-                "ratingValue": "4.8",
-                "ratingCount": "1250",
-                "bestRating": "5",
-                "worstRating": "1"
+            "areaServed": {
+                "@type": "Country",
+                "name": "New Zealand"
             },
+            "inLanguage": "en-NZ",
             "featureList": [
-                "AI Trip Planning",
-                "Road Trip Routes",
-                "Hotel Recommendations",
-                "Activity Suggestions",
+                "AI Trip Planning for New Zealand",
+                "NZ Road Trip Routes",
+                "Hotel & Accommodation Recommendations",
+                "Activity & Attraction Suggestions",
                 "Day-by-Day Itineraries",
-                "Cost Estimation",
-                "Google Maps Integration",
+                "Māori Cultural Experiences",
+                "Cost Estimation in NZD",
+                "Weather Forecasts",
                 "PDF Trip Download"
             ]
         }
@@ -87,11 +89,10 @@
         {
             "@context": "https://schema.org",
             "@type": "Organization",
-            "name": "TripMate",
-            "url": "https://tripmate",
-            "logo": "https://tripmate/logo.png",
-            "description": "AI-powered intelligent trip planning assistant",
-            "sameAs": []
+            "name": "TripMate NZ",
+            "url": "https://tripmate.travel",
+            "logo": "https://tripmate.travel/favicon_io/android-chrome-512x512.png",
+            "description": "AI-powered New Zealand trip planning assistant"
         }
         </script>
         
@@ -102,18 +103,18 @@
             "mainEntity": [
                 {
                     "@type": "Question",
-                    "name": "What is TripMate?",
+                    "name": "What is TripMate NZ?",
                     "acceptedAnswer": {
                         "@type": "Answer",
-                        "text": "TripMate is an AI-powered trip planner that helps you plan perfect road trips. Simply tell it where you want to go, and it creates personalized routes, hotel recommendations, activities, and day-by-day itineraries."
+                        "text": "TripMate NZ is an AI-powered trip planner specifically for New Zealand (Aotearoa). Tell it where you want to go in NZ, and it creates personalized routes, hotel recommendations, Māori cultural experiences, activities, and day-by-day itineraries."
                     }
                 },
                 {
                     "@type": "Question",
-                    "name": "Is TripMate free to use?",
+                    "name": "Is TripMate NZ free to use?",
                     "acceptedAnswer": {
                         "@type": "Answer",
-                        "text": "Yes, TripMate is free to use. You can plan unlimited trips, get route suggestions, hotel recommendations, and download your itinerary as a PDF at no cost."
+                        "text": "Yes, TripMate NZ is free to use. You can plan unlimited trips across New Zealand, get route suggestions, hotel recommendations, activity ideas, and download your itinerary as a PDF at no cost."
                     }
                 },
                 {
@@ -121,15 +122,15 @@
                     "name": "How does the AI trip planner work?",
                     "acceptedAnswer": {
                         "@type": "Answer",
-                        "text": "Simply type your trip request like 'Plan a trip from Auckland to Waitomo Caves for 3 days' and our AI instantly creates a comprehensive plan with multiple route options, accommodations, activities, places to visit, and a detailed timeline."
+                        "text": "Simply type your trip request like 'Plan a trip from Auckland to Bay of Islands for 3 days' and our AI instantly creates a comprehensive NZ plan with route options, accommodations, activities, places to visit, weather forecasts, and a detailed timeline."
                     }
                 },
                 {
                     "@type": "Question",
-                    "name": "Can I get more hotel or activity options?",
+                    "name": "What areas of New Zealand can I plan trips for?",
                     "acceptedAnswer": {
                         "@type": "Answer",
-                        "text": "Yes! Just ask for 'more hotels' or 'more activities' and the AI will add additional options to your existing trip plan without losing any of your current selections."
+                        "text": "TripMate NZ covers all of New Zealand including Auckland, Wellington, Queenstown, Rotorua, Christchurch, Bay of Islands, Milford Sound, Hobbiton, Dunedin, and more. It specializes in both North and South Island destinations."
                     }
                 }
             ]
@@ -141,25 +142,21 @@
         <link rel="preconnect" href="https://maps.googleapis.com" />
         <link rel="dns-prefetch" href="https://www.google.com" />
         <link rel="dns-prefetch" href="https://maps.googleapis.com" />
+        
         <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
-        <!--
-        These two scripts have been added for the Visual Edits, please do not edit or remove them
-        -->
+        
+        <!-- Visual Edits Scripts -->
         <script>
-            // Only load visual edit scripts when inside an iframe
             if (window.self !== window.top) {
-                // Load debug monitor script
                 var debugMonitorScript = document.createElement('script');
                 debugMonitorScript.src = 'https://assets.emergent.sh/scripts/debug-monitor.js';
                 document.head.appendChild(debugMonitorScript);
 
-                // Configure Tailwind
                 window.tailwind = window.tailwind || {};
                 tailwind.config = {
                     corePlugins: { preflight: false },
                 };
 
-                // Load Tailwind CDN
                 var tailwindScript = document.createElement('script');
                 tailwindScript.src = 'https://cdn.tailwindcss.com';
                 document.head.appendChild(tailwindScript);
@@ -167,19 +164,10 @@
         </script>
     </head>
     <body>
-        <noscript>You need to enable JavaScript to run this app.</noscript>
+        <noscript>You need to enable JavaScript to run TripMate NZ.</noscript>
         <div id="root"></div>
-        <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
        
+        <!-- PostHog Analytics -->
         <script>
             !(function (t, e) {
                 var o, n, p, r;
@@ -244,7 +232,7 @@
             })(document, window.posthog || []);
             posthog.init("phc_yJW1VjHGGwmCbbrtczfqqNxgBDbhlhOWcdzcIJEOTFE", {
                 api_host: "https://us.i.posthog.com",
-                person_profiles: "identified_only", // or 'always' to create profiles for anonymous users as well
+                person_profiles: "identified_only",
             });
         </script>
     </body>
