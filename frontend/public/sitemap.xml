@@ -4,12 +4,28 @@
         xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
         http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
     
-    <!-- Homepage - AI Trip Planner -->
+    <!-- Homepage - AI Trip Planner for New Zealand -->
     <url>
-        <loc>https://tripmate.ai/</loc>
-        <lastmod>2025-01-01</lastmod>
+        <loc>https://tripmate.travel/</loc>
+        <lastmod>2026-01-05</lastmod>
         <changefreq>daily</changefreq>
         <priority>1.0</priority>
+    </url>
+    
+    <!-- Login Page -->
+    <url>
+        <loc>https://tripmate.travel/login</loc>
+        <lastmod>2026-01-05</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    
+    <!-- Signup Page -->
+    <url>
+        <loc>https://tripmate.travel/signup</loc>
+        <lastmod>2026-01-05</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
     </url>
     
 </urlset>
